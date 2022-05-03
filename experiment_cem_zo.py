@@ -40,7 +40,7 @@ def main(args):
     else:
         ctx=mx.gpu(device)
     
-    if data=="CIFER":
+    if data=="CIFAR":
         import loss.cifer_resnet as model
         max_index=10000
         num_classes=10
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     parser.add_argument("--l1", type=float, default=0.1)
     parser.add_argument("--l2", type=float, default=0.1)
     parser.add_argument("--mode", choices=["PN", "PP"], default="PN")
-    parser.add_argument("--data", choices=[ "CIFER","MNIST","IMAGENET"], default="MNIST")
+    parser.add_argument("--data", choices=[ "CIFAR","MNIST","IMAGENET"], default="MNIST")
     parser.add_argument("--alg", choices=[ "PGD","ExpMD","AdaExpMD"], default="AdaExpMD")
     parser.add_argument("--kappa", type=float, default=2)
     parser.add_argument("--seed", type=int, default=48)
