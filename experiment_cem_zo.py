@@ -78,12 +78,12 @@ def main(args):
                     cem=None
                     found=False
                     while not found and current_index<max_index:            
-                        if data in ["CIFER","MNIST"]:
+                        if data in ["CIFAR","MNIST"]:
                             cem=model.CEM(index=shuffled_indices[current_index],ctx=ctx,kappa=kappa)
                         elif data=="IMAGENET":
                             cem=model.CEM(index=shuffled_indices[current_index],ctx=ctx,kappa=kappa,folder_path=root)
                         current_index+=1
-                        if data== data in ["CIFER","MNIST"] and (cem.label== class_idx and cem.correct):
+                        if data== data in ["CIFAR","MNIST"] and (cem.label== class_idx and cem.correct):
                             found=True
                             break
                         elif data=="IMAGENET" and cem.correct:                        
