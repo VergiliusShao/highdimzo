@@ -3,7 +3,7 @@ from scipy.optimize import OptimizeResult
 import numpy as np
 import numpy.linalg as lina
 class AdaExpGrad(object):
-    def __init__(self, func, func_p, x0, lower, upper, l1=1.0, l2=1.0,eta=1.0):
+    def __init__(self, func, func_p, x0, lower, upper, l1=1.0, l2=1.0,eta=0.0):
         self.func = func
         self.func_p=func_p
         self.x= np.zeros(shape=x0.shape)
@@ -11,10 +11,11 @@ class AdaExpGrad(object):
         self.d = self.x.size
         self.lower=lower
         self.upper=upper
-        self.lam=1.0
         self.l1=l1
         self.l2=l2
-        self.eta=eta
+        self.eta=0.0
+        self.D=1.0
+
     def update(self):
         g=self.func_p(self.x)
         self.step(g)
@@ -25,24 +26,25 @@ class AdaExpGrad(object):
         
     def md(self,g):
         beta = 1.0 / self.d
-        eta_t = np.sqrt(self.lam)
-        z=(np.log(np.abs(self.x) / beta + 1.0)) * np.sign(self.x) - g / eta_t
-        x_sgn = np.sign(z)
+        eta_t_m_1=np.maximum(1.0,np.sqrt(self.eta))
+        z=(np.log(np.abs(self.x) / beta + 1.0)) * np.sign(self.x) - g/eta_t_m_1
+        v_sgn = np.sign(z)
         if self.l2 == 0.0:
-            x_val = beta * np.exp(np.maximum(np.abs(z) - self.l1 / eta_t,0.0)) - beta
+            v_val = beta * np.exp(np.maximum(np.abs(z) - self.l1/eta_t_m_1 ,0.0)) - beta
         else:
             a = beta
-            b = self.l2 / eta_t
-            c = np.minimum(self.l1 / eta_t - np.abs(z),0.0)
+            b = self.l2/eta_t_m_1
+            c = np.minimum(self.l1/eta_t_m_1- np.abs(z),0.0)
             abc=-c+np.log(a*b)+a*b
-            x_val = np.where(abc>=15.0,np.log(abc)-np.log(np.log(abc))+np.log(np.log(abc))/np.log(abc), lambertw( np.exp(abc), k=0).real )/b-a
-        x = x_sgn * x_val
-        x = np.clip(x, self.lower, self.upper)
-        norm_curr=lina.norm(x.flatten(),ord=1)
-        norm_prev=lina.norm(self.x.flatten(),ord=1)
-        norm_max=np.maximum(norm_curr,norm_prev)
-        self.lam+=((2*eta_t*lina.norm((x-self.x).flatten(),ord=1)/(beta*self.d+norm_max))**2)
-        self.x[:]=x
+            v_val = np.where(abc>=15.0,np.log(abc)-np.log(np.log(abc))+np.log(np.log(abc))/np.log(abc), lambertw( np.exp(abc), k=0).real )/b-a
+        v = v_sgn * v_val
+        v = np.clip(v, self.lower, self.upper)
+        D=np.maximum(lina.norm(self.x.flatten(),ord=1),lina.norm(v.flatten(),ord=1))
+        self.D=np.maximum(D,self.D)
+        lam=2.0/(self.D+1.0)
+        self.eta+=((lina.norm((v-self.x).flatten(),ord=1)*eta_t_m_1*lam)**2)
+        eta_t=np.maximum(1.0,np.sqrt(self.eta))
+        self.x[:]=(1.0-eta_t_m_1/eta_t)*self.x+eta_t_m_1/eta_t*v
         
 
 def fmin(func,x0, upper,lower,finite_sum=False,l1=1.0,l2=1.0, maxfev=50,callback=None, epoch_size=10,eta=1.0):
@@ -52,7 +54,7 @@ def fmin(func,x0, upper,lower,finite_sum=False,l1=1.0,l2=1.0, maxfev=50,callback
         func=Group_Loss(func)
     else:
         func_p=Grad_2p_batch(func,maxfev,delta)
-    alg=AdaExpGrad(func=func,func_p=func_p,x0=x0,upper=upper,lower=lower,l1=l1,l2=l2,eta=eta)
+    alg=AdaExpGrad(func=func,func_p=func_p,x0=x0,upper=upper,lower=lower,l1=l1,l2=l2,eta=0.0)
     nit=maxfev
     fev=1
     y=None
@@ -78,13 +80,13 @@ class Grad_2p_batch:
         batch[:]=x
         batch_v[:]=x
         g=np.zeros(shape=x.shape)
-        for i in range(self.n):
+        for i in range(self.n+1):
             v= np.random.choice([-1.0,1.0],size=x.shape,p=[0.5,0.5])
             batch=np.append(batch,x+self.delta*v, axis=0)
             batch_v=np.append(batch_v,v, axis=0)
         batch_y=self.func(batch)
         tilde_f_x_r= batch_y[0]
-        for i in range(1,self.n):
+        for i in range(1,self.n+1):
             tilde_f_x_l= batch_y[i]
             g[0]+=1.0/self.delta/self.n*(tilde_f_x_l-tilde_f_x_r)*batch_v[i]
         return g
@@ -106,7 +108,7 @@ class Group_Grad_2p:
     def __call__(self, x):
         d=x.size
         g=np.zeros(shape=x.shape)
-        for i in range(self.n):
+        for i in range(self.n+1):
             idx =np.random.randint(len(self.func_ary))
             v= np.random.normal(size=x.shape)
             v_norm= np.linalg.norm(v)
