@@ -3,7 +3,7 @@ from scipy.special import lambertw
 from scipy.optimize import OptimizeResult
 import numpy as np
 import numpy.linalg as lina
-class AdaExpGrad(object):
+class AdaExpGradP(object):
     def __init__(self, func, func_p, x0, lower, upper, l1=1.0, l2=1.0,eta=1.0):
         self.func = func
         self.func_p=func_p
@@ -14,7 +14,7 @@ class AdaExpGrad(object):
         self.upper=upper
         self.l1=l1
         self.l2=l2
-        self.eta=1.0
+        self.eta=0.0
         self.D=1.0
 
     def update(self):
@@ -27,7 +27,7 @@ class AdaExpGrad(object):
         
     def md(self,g):
         beta = 1.0 / self.d
-        eta_t=np.sqrt(self.eta)
+        eta_t=np.maximum(np.sqrt(self.eta),1)
         z=(np.log(np.abs(self.x) / beta + 1.0)) * np.sign(self.x) - g/eta_t
         v_sgn = np.sign(z)
         if self.l2 == 0.0:
@@ -42,7 +42,9 @@ class AdaExpGrad(object):
         v = np.clip(v, self.lower, self.upper)
         D=np.maximum(np.linalg.norm((self.x).flatten(), ord=1),np.linalg.norm((v).flatten(), ord=1))
         self.eta+=(eta_t/(D+1)*np.linalg.norm((self.x-v).flatten(), ord=1))**2
-        self.x[:]=v
+        eta_t_1=np.maximum(np.sqrt(self.eta),1)
+        self.x[:]=(1.0-eta_t/eta_t_1)*self.x+eta_t/eta_t_1*v
+        
 
 def fmin(func, x0, upper,lower,l1=1.0,l2=1.0, func_p=None,stochastic=False, maxfev=50,batch=10,callback=None, epoch_size=10,eta=1.0):
     delta=np.sqrt(2*np.e *(2*np.log(x0.size-1)))/np.sqrt(maxfev)/x0.size
@@ -52,7 +54,7 @@ def fmin(func, x0, upper,lower,l1=1.0,l2=1.0, func_p=None,stochastic=False, maxf
             func_p=Grad_2p_Stoc(func,b,delta)
         else:
             func_p=Grad_2p_batch(func,b,delta)
-    alg=AdaExpGrad(func=func,func_p=func_p,x0=x0,upper=upper,lower=lower,l1=l1,l2=l2,eta=eta)
+    alg=AdaExpGradP(func=func,func_p=func_p,x0=x0,upper=upper,lower=lower,l1=l1,l2=l2,eta=eta)
     fev=1
     y=None
     while fev<=maxfev:
@@ -74,11 +76,9 @@ class Grad_2p_batch:
         self.delta=delta
     def __call__(self, x):
         batch_v=np.random.choice([-1.0,1.0],size=x.shape,p=[0.5,0.5])
-        #batch_v=np.random.uniform(-1,1,size=x.shape)
         batch=x+self.delta*batch_v
         for i in range(self.b-1):
             v = np.random.choice([-1.0,1.0],size=x.shape,p=[0.5,0.5])
-            #v = np.random.uniform(-1,1,size=x.shape)
             batch=np.append(batch,x+self.delta*v, axis=0) 
             batch_v=np.append(batch_v,v, axis=0)
         batch=np.append(batch, x, axis=0)   

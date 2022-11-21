@@ -1,4 +1,5 @@
 from __future__ import print_function
+from typing import KeysView
 import mxnet as mx
 from mxnet.ndarray import ndarray
 import numpy as np
@@ -36,11 +37,11 @@ class Net(gluon.Block):
         x = F.tanh(self.fc2(x))
         return x
 
+
 class CEM:
-    def __init__(self, index=2593,kappa=2,ctx=mx.cpu()):
+    def __init__(self, index=2593,ctx=mx.cpu()):
     # Preparing the dataset:
         self.ctx=ctx
-        self.kappa=mx.nd.array([-kappa],ctx=self.ctx)
         mnist = mx.test_utils.get_mnist()
         batch_size = 100
         model_file = "LeNet on MNist.model"
@@ -62,6 +63,7 @@ class CEM:
         self.pn_upper-=np_x
         self.pn_lower=np.zeros(shape=self.shape)
         self.pn_lower-=np_x
+        self.pn_init=np.zeros(shape=self.shape)
         self.pn_init=(self.pn_lower+self.pn_upper)/2
         #self.pn_init=np.zeros(shape=self.shape)
         #self.pn_init+=np_x
@@ -91,7 +93,9 @@ class CEM:
         y_delta_batch=(self.net(mx_delta))
         attack=[]
         for y_delta in y_delta_batch:
-            attack.append(mx.nd.maximum(mx.nd.max(mx.nd.contrib.boolean_mask(y_delta,self.mask))-y_delta[self.label],self.kappa).asnumpy()[0])
+            attack_value=(mx.nd.max(mx.nd.contrib.boolean_mask(y_delta,self.mask))-y_delta[self.label]).asnumpy()[0]
+            loss=attack_value+np.log(1.0+np.exp(-attack_value))
+            attack.append(loss)
         if len(attack)==1:
             return attack[0]
         else:
@@ -113,7 +117,9 @@ class CEM:
         y_delta_batch=(self.net(self.x+mx_delta))
         attack=[]
         for y_delta in y_delta_batch:
-            attack.append(mx.nd.maximum(y_delta[self.label]-mx.nd.max(mx.nd.contrib.boolean_mask(y_delta,self.mask)),self.kappa).asnumpy()[0])
+            attack_value=(y_delta[self.label]-mx.nd.max(mx.nd.contrib.boolean_mask(y_delta,self.mask))).asnumpy()[0]
+            loss=attack_value+np.log(1.0+np.exp(-attack_value))
+            attack.append(loss)
         if len(attack)==1:
             return attack[0]
         else:
