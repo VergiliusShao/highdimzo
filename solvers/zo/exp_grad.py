@@ -40,13 +40,9 @@ class ExpGrad(object):
         self.x = np.clip(x, self.lower, self.upper)
         
 
-def fmin(func,x0, upper,lower,finite_sum=False,l1=1.0,l2=1.0, maxfev=50,callback=None, epoch_size=10,eta=1.0):
+def fmin(func,x0, upper,lower,l1=1.0,l2=1.0,batch=50, maxfev=50,callback=None, epoch_size=10,eta=1.0):
     delta=np.sqrt(2*np.e *(2*np.log(x0.size-1)))/np.sqrt(maxfev)/x0.size
-    if finite_sum:
-        func_p=Group_Grad_2p(func,maxfev,delta)
-        func=Group_Loss(func)
-    else:
-        func_p=Grad_2p_batch(func,maxfev,delta)
+    func_p=Grad_2p_batch(func,batch,delta)
     alg=ExpGrad(func=func,func_p=func_p,x0=x0,upper=upper,lower=lower,l1=l1,l2=l2,eta=eta)
     nit=maxfev
     fev=1
@@ -75,41 +71,11 @@ class Grad_2p_batch:
         g=np.zeros(shape=x.shape)
         for i in range(self.n):
             v= np.random.choice([-1.0,1.0],size=x.shape,p=[0.5,0.5])
-            #v_norm= np.linalg.norm(v)
-            #v=v/v_norm
-            #v=np.sign(v)
             batch=np.append(batch,x+self.delta*v, axis=0)
             batch_v=np.append(batch_v,v, axis=0)
         batch_y=self.func(batch)
         tilde_f_x_r= batch_y[0]
-        for i in range(1,self.n):
+        for i in range(1,self.n+1):
             tilde_f_x_l= batch_y[i]
-            g[0]+=1.0/self.delta/self.n*(tilde_f_x_l-tilde_f_x_r)*batch_v[i]
-        return g
-
-class Group_Loss:
-    def __init__(self, func_ary):
-        self.func_ary=func_ary
-    def __call__(self, x):
-        loss=0
-        for func in self.func_ary:
-            loss+=func(x)
-        return loss/len(self.func_ary)
-    
-class Group_Grad_2p:
-    def __init__(self, func_ary, n, delta):
-        self.func_ary=func_ary
-        self.n=n
-        self.delta=delta
-    def __call__(self, x):
-        d=x.size
-        g=np.zeros(shape=x.shape)
-        for i in range(self.n):
-            idx =np.random.randint(len(self.func_ary))
-            v= np.random.normal(size=x.shape)
-            v_norm= np.linalg.norm(v)
-            v=v/v_norm
-            tilde_f_x_l= self.func_ary[idx](x+self.delta*v)
-            tilde_f_x_r= self.func_ary[idx](x)
-            g+=d/self.delta/self.n*(tilde_f_x_l-tilde_f_x_r)*v
+            g+=1.0/self.delta/self.n*(tilde_f_x_l-tilde_f_x_r)*batch_v[i]
         return g
